@@ -10,12 +10,14 @@
 
 // Check dependencies betweens plugins
 if (typeof π === 'undefined') throw 'Core is not installed';
-π.core.require([[π.core.version, '>= 1.0.2-dev']]);
+π.core.require([[π.plugins.core.version, '>= 1.2.0-dev']]);
 
 // The core of the script
-π.picture = {
-  version: '1.0.0-dev'
+π.plugins.picture = {
+  version: '1.1.0-dev'
 };
+
+π.picture = π.picture || {};
 
 π.picture._get = function(id) {
   return $gameScreen.picture(id);
@@ -192,6 +194,7 @@ if (typeof π === 'undefined') throw 'Core is not installed';
 π.picture.move = function(
   id,
   duration,
+  wait,
   x,
   y,
   scaleX,
@@ -201,6 +204,7 @@ if (typeof π === 'undefined') throw 'Core is not installed';
 ) {
   const picture = π.picture._get(id);
   const origin = picture.origin();
+  wait = typeof wait === 'boolean' ? wait : false;
   x = typeof x === 'undefined' || x === π.noOp ? picture.x() : x;
   y = typeof y === 'undefined' || y === π.noOp ? picture.y() : y;
   scaleX =
@@ -221,18 +225,46 @@ if (typeof π === 'undefined') throw 'Core is not installed';
       ? picture.blendMode()
       : blendMode;
   picture.move(origin, x, y, scaleX, scaleY, opacity, blendMode, duration);
+  if (wait) {
+    π._tryInterpreter(function(self) {
+      return self.wait(duration);
+    });
+  }
 };
 
-π.picture.tint = function(id, duration, tone) {
+/**
+ * Move a picture
+ * @param {int} id the id of the picture
+ * @param {array} tone
+ * @param {int} duration
+ * @param {bool} wait
+ */
+π.picture.tint = function(id, tone, duration, wait) {
+  wait = typeof wait === 'boolean' ? wait : false;
+  duration = typeof duration === 'number' ? duration : 0;
   $gameScreen.tintPicture(id, tone, duration);
+  if (wait) {
+    π._tryInterpreter(function(self) {
+      return self.wait(duration);
+    });
+  }
 };
 
 /**
  * Rotate (with a speed) a picture
+ * @param {int} id the id of the picture
  * @param {int} speed the rotation's speed
  */
 π.picture.rotate = function(id, speed) {
   $gameScreen.rotatePicture(id, speed);
+};
+
+/**
+ * Erase a picture
+ * @param {int} id the id of the picture
+ */
+π.picture.erase = function(picture_id) {
+  $gameScreen.erasePicture(picture_id);
 };
 
 /**

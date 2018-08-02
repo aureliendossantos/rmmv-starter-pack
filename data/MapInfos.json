@@ -1,4 +1,5 @@
 [
 null,
-{"id":1,"expanded":false,"name":"Interrupteurs et variables","order":1,"parentId":0,"scrollX":512.6666666666666,"scrollY":462}
+{"id":1,"expanded":false,"name":"Interrupteurs et variables","order":1,"parentId":0,"scrollX":512.6666666666666,"scrollY":462},
+{"id":2,"expanded":false,"name":"Test du jeu depuis l'éditeur","order":2,"parentId":0,"scrollX":837.3333333333334,"scrollY":478}
 ]

@@ -12,10 +12,12 @@
  */
 
 const π = {
+  plugins: { core: {} },
   core: {},
   _artifacts: {
-    version: '1.0.2-dev'
-  }
+    version: '1.2.0-dev'
+  },
+  _currentInterpreter: null
 };
 
 /**
@@ -140,7 +142,7 @@ Version.check = function(base, constraint) {
  * Get the current version of Pico
  */
 Version.current = Version.parse(π._artifacts.version);
-π.core.version = Version.current;
+π.plugins.core.version = Version.current;
 π.core.require = function(deps) {
   if (Utils.isOptionValid('test')) {
     deps.forEach(function(elt) {
@@ -243,7 +245,8 @@ function SS(mapId, eventId, id, value) {
  */
 function V(id, value) {
   if (typeof value !== 'undefined') {
-    $gameVariables.setValue(id, value);
+    $gameVariables._data[id] = value;
+    $gameVariables.onChange();
   }
   return $gameVariables.value(id);
 }
@@ -276,6 +279,26 @@ function SV(mapId, eventId, id, value) {
 π.player = {};
 π.map = {};
 π.party = {};
+π.tone = {};
+
+/**
+ * Describe a tone
+ */
+π.tone.make = function(r, g, b, gray) {
+  gray = typeof gray === 'undefined' ? 0 : gray;
+  return [r, g, b, gray];
+};
+
+π.actor.parameter = {
+  HP_MAX: 0,
+  MP_MAX: 1,
+  ATK: 2,
+  DEF: 3,
+  MAGIC_ATK: 4,
+  MAGIC_DEF: 5,
+  AGILITY: 6,
+  LUCK: 7
+};
 
 /**
  * Get a random value betweend a and b
@@ -388,7 +411,7 @@ function SV(mapId, eventId, id, value) {
  */
 π.actor.mp = function(id) {
   const actor = $gameActors.actor(id);
-  if (actor) return actor.hp;
+  if (actor) return actor.mp;
 };
 
 /**
@@ -425,6 +448,42 @@ function SV(mapId, eventId, id, value) {
 π.actor.def = function(id) {
   const actor = $gameActors.actor(id);
   if (actor) return actor.def;
+};
+
+/**
+ * Get the def point of an actor
+ * @param {int} id the id of the actor
+ */
+π.actor.magic_def = function(id) {
+  const actor = $gameActors.actor(id);
+  if (actor) return actor.mdf;
+};
+
+/**
+ * Get the atk point of an actor
+ * @param {int} id the id of the actor
+ */
+π.actor.magic_atk = function(id) {
+  const actor = $gameActors.actor(id);
+  if (actor) return actor.mat;
+};
+
+/**
+ * Get the agility point of an actor
+ * @param {int} id the id of the actor
+ */
+π.actor.agility = function(id) {
+  const actor = $gameActors.actor(id);
+  if (actor) return actor.agi;
+};
+
+/**
+ * Get the luck point of an actor
+ * @param {int} id the id of the actor
+ */
+π.actor.luck = function(id) {
+  const actor = $gameActors.actor(id);
+  if (actor) return actor.luk;
 };
 
 /**
@@ -564,13 +623,6 @@ function SV(mapId, eventId, id, value) {
 };
 
 /**
- * Get the timer's value (in second)
- */
-π.party.timer = function() {
-  return $gameTimer.seconds();
-};
-
-/**
  * Get the number of save
  */
 π.party.save_count = function() {
@@ -599,6 +651,7 @@ function SV(mapId, eventId, id, value) {
 };
 
 π.noOp = Symbol('noOp');
+const Ø = π.noOp;
 
 /**
  * Describes a direction
@@ -607,7 +660,8 @@ function SV(mapId, eventId, id, value) {
   TOP: 8,
   LEFT: 4,
   RIGHT: 6,
-  BOTTOM: 2
+  BOTTOM: 2,
+  PRESERVE: 0
 };
 
 /**
@@ -641,11 +695,13 @@ function SV(mapId, eventId, id, value) {
 };
 
 /**
- * Describe a tone
+ * Describe a kind of object
  */
-π.tone = function(r, g, b, gray) {
-  gray = typeof gray === 'undefined' ? 0 : gray;
-  return [r, g, b, gray];
+π.item.kind = {
+  NORMAL: 1,
+  KEY: 2,
+  HIDDEN_A: 3,
+  HIDDEN_B: 4
 };
 
 /*
@@ -718,7 +774,87 @@ DataManager.extractSaveContents = function(contents) {
   $gameSelfVariables._data = contents.selfVariables._data;
 };
 
+// Patch for the interpreter
+
+π._tryInterpreter = function(combinator) {
+  if (π._currentInterpreter instanceof Game_Interpreter) {
+    return combinator(π._currentInterpreter);
+  }
+};
+
+π._performSideEffect = function(combinator) {
+  return π._tryInterpreter(function(self) {
+    self._hasSideEffect = true;
+    return combinator(self);
+  });
+};
+
+const PICO_c111 = Game_Interpreter.prototype.command111;
+Game_Interpreter.prototype.command111 = function() {
+  π._currentInterpreter = this;
+  return PICO_c111.call(this);
+};
+
+const PICO_c122 = Game_Interpreter.prototype.command122;
+Game_Interpreter.prototype.command122 = function() {
+  π._currentInterpreter = this;
+  return PICO_c122.call(this);
+};
+
+const PICO_c101 = Game_Interpreter.prototype.command101;
+Game_Interpreter.prototype.command101 = function() {
+  π._currentInterpreter = this;
+  return PICO_c101.call(this);
+};
+
+Game_Interpreter.prototype._hasSideEffect = false;
+const PICO_c355 = Game_Interpreter.prototype.command355;
+Game_Interpreter.prototype.command355 = function() {
+  π._currentInterpreter = this;
+  let script = this.currentCommand().parameters[0] + '\n';
+  while (this.nextEventCode() === 655) {
+    this._index++;
+    script += this.currentCommand().parameters[0] + '\n';
+  }
+  const result = eval(script);
+  if (this._hasSideEffect) {
+    this._hasSideEffect = false;
+    return !!result;
+  }
+  return true;
+};
+
+// Patch on Windows
+const PICO_escapeCharacters = Window_Base.prototype.convertEscapeCharacters;
+Window_Base.prototype.convertEscapeCharacters = function(text) {
+  text = text.replace(
+    /\\SV\[([^\]]+)\]/gi,
+    function() {
+      const subject = arguments[1].split(/\,/).map(function(i) {
+        return parseInt(i.trim(), 10);
+      });
+      if (subject.length == 3) {
+        return SV(subject[0], subject[1], subject[2]);
+      }
+      if (subject.length == 2) {
+        return SV($gameMap.mapId(), subject[0], subject[1]);
+      }
+      if (subject.length == 1) {
+        const id = π._tryInterpreter(function(self) {
+          return self._eventId;
+        });
+        return SV($gameMap.mapId(), id, subject[0]);
+      }
+      return '?<SV[' + arguments[1] + ']>';
+    }.bind(this)
+  );
+  text = PICO_escapeCharacters.call(this, text);
+  return text;
+};
+
 /**
  * To be easy
  */
 const Pico = π;
+const pico = π;
+const nco = π;
